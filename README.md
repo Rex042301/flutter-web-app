@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # aiper
 
 A new Flutter project.
@@ -14,3 +15,8 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
+=======
+# Flutter Web App
+
+This is a Flutter web application deployed using GitHub Pages.
+>>>>>>> 8a96faa296fe6f4a1310ddb1c2267725b1fb1523
