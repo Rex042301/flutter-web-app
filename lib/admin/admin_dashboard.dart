@@ -4,11 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:vibration/vibration.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 // Pages
-import 'mapp_page.dart'; // Siguraduhing ito ang AdminMap mo
-import '../login.dart';
+import 'mapp_page.dart';
 import 'admin_home.dart';
 import 'admin_services.dart';
 import 'admin_updates.dart';
@@ -21,18 +19,20 @@ class AdminDashboardPage extends StatefulWidget {
   State<AdminDashboardPage> createState() => _AdminDashboardPageState();
 }
 
-class _AdminDashboardPageState extends State<AdminDashboardPage> with SingleTickerProviderStateMixin {
+class _AdminDashboardPageState extends State<AdminDashboardPage>
+    with SingleTickerProviderStateMixin {
   int _selectedIndex = 0;
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isSirenPlaying = false;
   String? _latestDocId;
   StreamSubscription<QuerySnapshot>? _sosSubscription;
 
-  late final List<Widget> _screens = [
-    const AdminHome(),
+  // Screens with onBack callbacks fixed
+  List<Widget> get _screens => [
+    AdminHome(onNavigate: (index) => _onItemTapped(index)),
     const AdminMap(),
-    const AdminServices(),
-    const AdminUpdates(),
+    AdminServices(onBack: () => _onItemTapped(0)),
+    AdminUpdates(onBack: () => _onItemTapped(0)),
     const AdminProfile(),
   ];
 
@@ -98,140 +98,213 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> with SingleTick
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black, // Pure Black Background
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          bool isDesktop = constraints.maxWidth > 800;
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          _buildMainBackground(),
 
-          return Stack(
-            children: [
-              Row(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              bool isDesktop = constraints.maxWidth > 800;
+              return Row(
                 children: [
                   if (isDesktop) _buildNavigationRail(),
                   Expanded(
-                    child: IndexedStack(
-                      index: _selectedIndex,
-                      children: _screens,
+                    child: Padding(
+                      padding:
+                      EdgeInsets.only(bottom: isDesktop ? 0 : 90),
+                      child: IndexedStack(
+                        index: _selectedIndex,
+                        children: _screens,
+                      ),
                     ),
                   ),
                 ],
-              ),
+              );
+            },
+          ),
 
-              // Glass Navbar para sa Mobile
-              if (!isDesktop)
-                Positioned(
-                  bottom: 30,
-                  left: 20,
-                  right: 20,
-                  child: _buildGlowingGlassNavbar(),
-                ),
+          Positioned(
+            bottom: 25,
+            left: 15,
+            right: 15,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth > 800) {
+                  return const SizedBox.shrink();
+                }
+                return _buildGlowingGlassNavbar();
+              },
+            ),
+          ),
 
-              // SOS ALERT INDICATOR (Lalabas kapag may active SOS)
-              if (_isSirenPlaying) _buildEmergencyOverlay(),
-            ],
-          );
-        },
+          if (_isSirenPlaying) _buildEmergencyOverlay(),
+        ],
       ),
     );
   }
 
-  // --- DESKTOP NAV RAIL ---
+  // --- UI BUILDING BLOCKS ---
+
+  Widget _buildMainBackground() {
+    return Stack(
+      children: [
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.black, Color(0xFF001220), Colors.black],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+        ),
+        _buildGlowCircle(top: -50, right: -50, color: Colors.blueAccent),
+        _buildGlowCircle(bottom: 50, left: -80, color: Colors.indigoAccent),
+      ],
+    );
+  }
+
+  Widget _buildGlowCircle({
+    double? top,
+    double? bottom,
+    double? left,
+    double? right,
+    required Color color,
+  }) {
+    return Positioned(
+      top: top,
+      bottom: bottom,
+      left: left,
+      right: right,
+      child: Container(
+        width: 300,
+        height: 300,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.15),
+              blurRadius: 100,
+              spreadRadius: 50,
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildNavigationRail() {
     return NavigationRail(
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.white.withOpacity(0.02),
       selectedIndex: _selectedIndex,
       onDestinationSelected: _onItemTapped,
       labelType: NavigationRailLabelType.all,
       selectedIconTheme: const IconThemeData(color: Colors.blueAccent),
       unselectedIconTheme: const IconThemeData(color: Colors.white24),
-      selectedLabelTextStyle: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold),
-      unselectedLabelTextStyle: const TextStyle(color: Colors.white24),
       destinations: const [
-        NavigationRailDestination(icon: Icon(Icons.grid_view_rounded), label: Text("Home")),
-        NavigationRailDestination(icon: Icon(Icons.map_rounded), label: Text("Map")),
-        NavigationRailDestination(icon: Icon(Icons.admin_panel_settings_rounded), label: Text("Services")),
-        NavigationRailDestination(icon: Icon(Icons.campaign_rounded), label: Text("Updates")),
-        NavigationRailDestination(icon: Icon(Icons.person_rounded), label: Text("Profile")),
+        NavigationRailDestination(
+            icon: Icon(Icons.grid_view_rounded), label: Text("Home")),
+        NavigationRailDestination(
+            icon: Icon(Icons.map_rounded), label: Text("Map")),
+        NavigationRailDestination(
+            icon: Icon(Icons.pending_actions_rounded),
+            label: Text("Services")),
+        NavigationRailDestination(
+            icon: Icon(Icons.campaign_rounded), label: Text("Updates")),
+        NavigationRailDestination(
+            icon: Icon(Icons.person_rounded), label: Text("Profile")),
       ],
     );
   }
 
-  // --- MOBILE GLOWING GLASS NAVBAR ---
   Widget _buildGlowingGlassNavbar() {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(35),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.white.withOpacity(0.08),
-            blurRadius: 20,
-            spreadRadius: 2,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(25),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          height: 70,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(25),
+            border:
+            Border.all(color: Colors.white.withOpacity(0.12), width: 1.2),
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(35),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-          child: Container(
-            height: 75,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(35),
-              border: Border.all(color: Colors.white.withOpacity(0.4), width: 1.5),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _navItem(Icons.grid_view_rounded, 0),
-                _navItem(Icons.map_rounded, 1),
-                _navItem(Icons.admin_panel_settings_rounded, 2),
-                _navItem(Icons.campaign_rounded, 3),
-                _navItem(Icons.person_rounded, 4),
-              ],
-            ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _navItem(Icons.grid_view_rounded, "HOME", 0),
+              _navItem(Icons.map_rounded, "MAP", 1),
+              _navItem(Icons.pending_actions_rounded, "PENDING", 2),
+              _navItem(Icons.campaign_rounded, "ANNOUNCE", 3),
+              _navItem(Icons.person_rounded, "PROFILE", 4),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _navItem(IconData icon, int index) {
+  Widget _navItem(IconData icon, String label, int index) {
     bool isSelected = _selectedIndex == index;
-    return GestureDetector(
+    return InkWell(
       onTap: () => _onItemTapped(index),
+      borderRadius: BorderRadius.circular(20),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
-        child: Icon(
-          icon,
-          color: isSelected ? Colors.blueAccent : Colors.white38,
-          size: isSelected ? 30 : 26,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.blueAccent.withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon,
+                color: isSelected ? Colors.blueAccent : Colors.white38,
+                size: 22),
+            if (isSelected) ...[
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: const TextStyle(
+                    color: Colors.blueAccent,
+                    fontSize: 8,
+                    fontWeight: FontWeight.bold),
+              ),
+            ]
+          ],
         ),
       ),
     );
   }
 
-  // --- EMERGENCY OVERLAY INDICATOR ---
   Widget _buildEmergencyOverlay() {
     return Positioned(
       top: 50,
       left: 20,
       right: 20,
       child: GestureDetector(
-        onTap: () => setState(() => _selectedIndex = 1), // Lilipat sa Map
+        onTap: () => _onItemTapped(1),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
           decoration: BoxDecoration(
-            color: Colors.redAccent.withOpacity(0.8),
+            color: Colors.redAccent.withOpacity(0.9),
             borderRadius: BorderRadius.circular(20),
-            boxShadow: [BoxShadow(color: Colors.redAccent.withOpacity(0.5), blurRadius: 15)],
+            boxShadow: [
+              BoxShadow(color: Colors.redAccent.withOpacity(0.4), blurRadius: 20)
+            ],
           ),
-          child: Row(
+          child: const Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
+            children: [
               Icon(Icons.warning_rounded, color: Colors.white),
               SizedBox(width: 10),
-              Text("EMERGENCY ACTIVE - CHECK MAP", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              Text(
+                "EMERGENCY ACTIVE - CHECK MAP",
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              ),
             ],
           ),
         ),
